@@ -1,2 +1,5 @@
 .venv
 *.db
+CLAUDE.md
+docker-compose.yml
+Dockerfile
