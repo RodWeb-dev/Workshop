@@ -2,6 +2,7 @@
 
 import pathlib
 import sqlite3
+import time
 
 import serial
 
@@ -9,7 +10,7 @@ path = pathlib.Path(__file__).parent.parent.resolve()
 
 timeout = 3  # Délai d'attente pour la lecture du port série
 rate = 9600  # Vitesse de communication du port série
-port = "/dev/pts/9"
+port = "/dev/ttyACM0"  # Port série à utiliser
 
 db = sqlite3.connect(path / "db/serre.db")
 db.execute("PRAGMA foreign_keys = ON")
@@ -61,6 +62,8 @@ def parse_real(text):
     real = real.split(";")
     for paire in real:
         cle, valeur = paire.split("=")
+        cle = cle.strip()
+        valeur = valeur.strip()
         data[cle] = float(valeur)
     return data
 
@@ -71,6 +74,8 @@ def parse_binary(text):
     binary = binary.split(";")
     for paire in binary:
         cle, valeur = paire.split("=")
+        cle = cle.strip()
+        valeur = valeur.strip()
         if valeur == "ON" and not equipements[cle]["Etat"]:
             equipements[cle]["Etat"] = True
             equipements[cle]["Event_id"] = start_event(equipements[cle]["ID"])
@@ -83,13 +88,20 @@ def parse_binary(text):
 # Lires les données depuis le port série
 with serial.Serial(port, rate, timeout=timeout) as ser:
     print("Serial port opened")
+    time.sleep(2)  # Attendre que le port série soit prêt
+    reset = ser.reset_input_buffer()  # Réinitialiser le tampon d'entrée
+    ser.readline()  # Lire la première ligne pour ignorer les données initiales
     while True:
         line = ser.readline()
         if line:
             print(f"Received: {line}")
             text = line.decode("utf-8", errors="ignore").strip()
             if text:
-                print(f"Parsed: {text}")
-                data = parse_real(text)
-                insert_real_data(data)
-                parse_binary(text)
+                try:
+                    print(f"Parsed: {text}")
+                    data = parse_real(text)
+                    insert_real_data(data)
+                    parse_binary(text)
+                except (ValueError, KeyError, IndexError) as e:
+                    print(f"Error parsing line: {e}")
+                    print(f"Line content: {text}")

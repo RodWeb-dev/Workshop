@@ -11,7 +11,7 @@ function getActualRealData(SQLite3 $db)
 
 function getActualEvent(SQLite3 $db)
 {
-    $query = "SELECT e.id, eq.name FROM events AS e
+    $query = "SELECT eq.id, eq.name FROM events AS e
                 JOIN equipements AS eq ON e.equipement_id = eq.id
                 WHERE e.ended_at IS NULL
                 ";
@@ -34,19 +34,39 @@ function getReadings(SQLite3 $db)
     return $readings;
 }
 
+function getEquipementsStats(SQLite3 $db)
+{
+    $query = "SELECT equipement_id,
+                      COUNT(*) AS cycles,
+                      SUM(strftime('%s', COALESCE(ended_at, CURRENT_TIMESTAMP)) - strftime('%s', started_at)) AS duration
+                FROM events
+                GROUP BY equipement_id";
+    $res = $db->query($query);
+    $stats = [];
+    while ($row = $res->fetchArray(SQLITE3_ASSOC)) {
+        $stats[$row['equipement_id']] = [
+            'cycles' => (int) $row['cycles'],
+            'duration' => (int) $row['duration'],
+        ];
+    }
+    return $stats;
+}
+
 try {
     $db = new SQLite3($path . '/db/serre.db');
 
     $actualRealData = getActualRealData($db);
     $actualEvent = getActualEvent($db);
     $readings = getReadings($db);
+    $equipementsStats = getEquipementsStats($db);
 
     http_response_code(200);
     header('Content-Type: application/json');
     echo json_encode([
         'actualRealData' => $actualRealData,
         'actualEvent' => $actualEvent,
-        'readings' => $readings
+        'readings' => $readings,
+        'equipementsStats' => $equipementsStats
         ]);
         } catch (Throwable $e) {
     http_response_code(500);
